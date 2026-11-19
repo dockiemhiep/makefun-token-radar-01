@@ -9,7 +9,7 @@ protocols, finds the ones that record no token, ranks them by what a launch woul
 multiples the market already pays for comparable protocols, and writes a concrete farm plan for each.
 It is an entry in make.fun's "Build the best token launch radar" bounty, built by an AI agent.
 
-![The board: 173 protocols that record no token, ranked by implied launch value](screenshots/1-board.png)
+![The board: 172 protocols that record no token, ranked by implied launch value](screenshots/1-board.png)
 
 ## What it does
 
@@ -20,10 +20,10 @@ last is ranked:
 | --- | ---: | --- |
 | Priced | 128 | The token trades and a market cap above zero is on record. These are the comparables, one per token. |
 | Ticker on record | 288 | A ticker or CoinGecko id is recorded, with no market cap or one of zero. A token already exists. |
-| Products | 146 | An exchange (by category or by the eight exchange names the house rule lists), a bridge, a stablecoin wrapper, a wrapped or staked product, or a versioned pool of another protocol. |
+| Products | 147 | An exchange (by category or by the eight exchange names the house rule lists), a bridge, a stablecoin wrapper, a wrapped, staked or restaking product, or a versioned pool of another protocol. The house rule names Liquid Restaking; a plain Restaking category is treated as the same product class. |
 | Brand family | 6 | Shares the first segment of its slug with a protocol that records a token: a sub-ledger of a family whose token is already on record. |
 | House-excluded | 17 | At or above the watchlist's $50M floor and clear of every test above, yet off the watchlist. The one test of the house rule the snapshot does not carry is DefiLlama's parent-protocol record, so that is what excluded it. |
-| Ranked | 173 | Records no token at all and falls in none of the sets above. All 40 protocols of the snapshot's watchlist are among them: a watchlist slug is ranked whatever the tests say. |
+| Ranked | 172 | Records no token at all and falls in none of the sets above. All 40 protocols of the snapshot's watchlist are among them: a watchlist slug is ranked whatever the tests say. |
 
 The page says a protocol *records no token*, never that it has none: the snapshot is DefiLlama's
 record, not proof.
@@ -54,10 +54,13 @@ or a depth step, the weekly cadence, and the exit rule with the total budget. Ca
 protocol's TVL tier, fees follow its chains, and the pacing follows its 7-day change and age. Every step
 names its protocol and no step is shared between rows. Only the lending playbook borrows. The snapshot's
 TVL is a protocol total, so no plan promises an exit: the larger positions are told to check the chosen
-vault's withdrawable liquidity first.
+vault's withdrawable liquidity first. A delegation plan states no exit timing of its own: it says to read
+the protocol's lock before depositing and wait it out, naming the timelock and unbonding where the record
+marks BTC staking. On a chain where Circle has announced a USDC pause (Noble, 2027-01-12) the plan passes
+transfers through and parks nothing.
 
 **It shows its working.** The dashboard is a static page with no network and no framework: a sortable,
-filterable board whose filters, sort order and open row live in the address so any view can be linked, a "set aside" view of the 585 protocols that are not ranked and why, and a detail
+filterable board whose filters, sort order and open row live in the address so any view can be linked, a "set aside" view of the 586 protocols that are not ranked and why, and a detail
 view for every ranked protocol with the derivation line by line and the full plan. The page and
 `main.ts` run the same model file, `dashboard/radar-model.js`, so the screen and the board cannot
 disagree.
@@ -84,9 +87,9 @@ node tools/verify.ts /path/to/kit/input/snapshot.json /path/to/kit/starter/vendo
 
 That runs `main.ts` twice and compares the bytes, holds the output to the seven rows of the house
 gate, holds the farm plans to their own rules (no step in more than one row, every step naming its
-protocol, no promised exit, borrowing only in lending categories, a named gas token in every plan), checks
-that no row outside the watchlist reaches the floor or shares a brand with a recorded token, and keeps the hand-written dashboard
-source under 61,000 bytes so the judge's dossier shows it whole.
+protocol, no promised exit, borrowing only in lending categories, a named gas token in every plan, no next-epoch withdrawal), checks
+that no row outside the watchlist reaches the floor or shares a brand with a recorded token or sits in a custody category, and keeps the hand-written dashboard
+source within 62,500 bytes and whole in the judge's dossier.
 
 ## Layout
 

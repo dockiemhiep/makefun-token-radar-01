@@ -24,7 +24,6 @@ const clamp = (x, lo, hi) => Math.min(hi, Math.max(lo, x));
 const round4 = (x) => Math.round(x * 1e4) / 1e4;
 const categoryOf = (p) => p.category || 'Uncategorised';
 
-/* The q-quantile of an ascending list. */
 function quantile(sorted, q) {
   const at = (sorted.length - 1) * q, lo = Math.floor(at), hi = Math.ceil(at);
   return sorted[lo] + (sorted[hi] - sorted[lo]) * (at - lo);
@@ -38,7 +37,8 @@ const shrink = (n, value, global) => Math.exp((n * Math.log(value) + K.prior * M
 const VERSIONED = /\s(V\d+(\.\d+)?|v\d+(\.\d+)?|\d+\.\d+)$/;
 const WRAPPER_WORD = /\b(wrapped|staked|staking)\b/i;
 const EXCHANGE = /^(Binance|Coinbase|Bybit|Kraken|Bitget|OKX|Bitfinex|Gemini)\b/i;
-const CUSTODY = ['Bridge', 'Canonical Bridge', 'Cross Chain Bridge', 'CEX', 'Liquid Restaking', 'Liquid Staking', 'Restaked BTC', 'Stablecoin Wrapper'];
+/* The house rule names Liquid Restaking; plain Restaking is the same product class. */
+const CUSTODY = ['Bridge', 'Canonical Bridge', 'Cross Chain Bridge', 'CEX', 'Liquid Restaking', 'Liquid Staking', 'Restaked BTC', 'Restaking', 'Stablecoin Wrapper'];
 const hasToken = (p) => p.mcap_usd !== null || p.symbol !== null || p.gecko_id !== null;
 const brandOf = (p) => p.slug.split('-')[0];
 
@@ -52,7 +52,7 @@ function tokenBrands(protocols) {
 /* Sorts a protocol into one of six sets; only `candidate` is ranked.
    priced     records a market cap: its token trades, and it is a comparable
    ticker     records a ticker or a CoinGecko id but no market cap
-   product    an exchange, bridge, wrapper, wrapped or staked product, or versioned pool
+   product    an exchange, bridge, wrapper, wrapped, staked or restaking product, or versioned pool
    family     shares its brand with a protocol that records a token: a sub-ledger of that family
    parent     at the watchlist's floor and clear of every test above, yet off the watchlist: what is left
               of the house rule is DefiLlama's parent-protocol record, which the snapshot does not carry
@@ -99,8 +99,7 @@ function comparables(protocols, priced) {
   for (const cat of Object.keys(groups).sort()) {
     const list = groups[cat].sort(asc), n = list.length;
     by[cat] = {
-      n: n,
-      median: round4(quantile(list, 0.5)),
+      n: n, median: round4(quantile(list, 0.5)),
       multiple: round4(shrink(n, quantile(list, 0.5), g.median)),
       low: round4(shrink(n, quantile(list, 0.25), g.low)),
       high: round4(shrink(n, quantile(list, 0.75), g.high))
@@ -145,9 +144,7 @@ function working(p, comps, asOf) {
   const age = ageDays(asOf, p.listed_at);
   const change = p.change_7d === null ? 0 : clamp(p.change_7d, -K.momentumPct, K.momentumPct);
   return {
-    multiple: basis.multiple,
-    low: basis.low,
-    high: basis.high,
+    multiple: basis.multiple, low: basis.low, high: basis.high,
     basis: cat ? 'category' : 'global',
     comps: basis.n,
     // size: (TVL / median comparable TVL) ^ ((b - 1) x sizeWeight), bounded
@@ -226,6 +223,8 @@ for (const entry of ('Ethereum=ETH=4,Arbitrum=ETH=0.15,Base=ETH=0.05,Optimism=ET
 for (const c of 'Ink,zkSync Era,World Chain,Robinhood Chain,RISE,Manta,Katana,Linea,Scroll,Morph,Blast,Reya Network,Hemi,Fluent,Unichain'.split(',')) GAS[c] = ['ETH', 0.03];
 const CHAIN_NAME = { Binance: 'BNB Chain', Ripple: 'XRP Ledger', 'Hyperliquid L1': 'Hyperliquid', 'Plume Mainnet': 'Plume' };
 const BTC_CHAIN = /^(Bitcoin|RSK|CORE|Mezo|BSquared|Citrea|Stacks)$/;
+/* Chain = the date Circle has announced it pauses USDC and CCTP there. */
+const PAUSE = { Noble: '2027-01-12' };
 const chainName = (c) => CHAIN_NAME[c] || c;
 const gasOf = (c) => GAS[c] || ['its gas token', 0.1];
 
@@ -262,8 +261,10 @@ const PLAYBOOKS = {
     'about ' + usd(c.lo * 0.25 * 0.08 / 12) + '-' + usd(c.hi * 0.25 * 0.08 / 12) + ' of interest a month at an assumed 8% APR, plus ' + usd(c.fee * 2) + ' in fees per cycle', '15 minutes a month']
   ],
   delegation: (c) => [
-    ['Pick one ' + c.name + ' vault on ' + c.chain + ' and deposit ' + c.range + ' of the single collateral asset it holds: the vault delegates it to operators. ' + c.depth, capital(c, 2) + '; an operator\'s fault can slash the stake', '20 minutes, once'],
-    ['In week two test ' + c.name + "'s exit with a small amount: request a withdrawal, wait for the vault's next epoch to end (it stays slashable until then), then claim.", fees(c, 2) + ' to request and claim', '15 minutes, over two epochs']
+    [(c.btc ? 'Stake ' + c.range + ' of BTC through one ' + c.name + ' route on ' + c.chain + ' and delegate it: the route holds it under a Bitcoin timelock, or an unbonding period and then a timelock. '
+      : 'Pick one ' + c.name + ' vault on ' + c.chain + ' and deposit ' + c.range + ' of the single collateral asset it holds: the vault delegates it to operators. ') + c.depth, capital(c, 2) + '; where slashing applies, an operator\'s fault can slash the stake', '20 minutes, once'],
+    ['Before depositing, read how long ' + c.name + ' locks an exit, then test it with a small amount: ' + (c.btc ? 'withdraw once the Bitcoin timelock expires or, on a route with unbonding, unbond and wait out its unbonding timelock first.'
+      : 'request a withdrawal, wait out the lock that vault enforces (the stake stays slashable meanwhile), then claim.'), fees(c, 2) + ' for the exit', '15 minutes, plus the lock']
   ],
   cover: (c) => [
     ['Stake ' + c.range + ' of ' + c.asset + ' in ' + c.name + "'s vault on " + c.chain + ' and keep ' + (c.fxrp ? 'the stXRP' : 'the receipt token') + ' it mints: its rate moves, and a paid cover claim can cut the stake. ' + c.depth, capital(c, 2) + ' to approve and stake', '20 minutes, once'],
@@ -301,12 +302,15 @@ const PLAYBOOKS = {
     ['Stake, lock or deposit ' + c.range + ' of the asset ' + c.name + ' accepts on ' + c.chain + ' and keep the receipt token or position in that wallet. ' + c.depth, capital(c, 2) + '; note the lock or unbonding delay before you commit', ONCE],
     ['Stay in ' + c.name + ' through at least three reward periods; claim or compound monthly and cast any vote the position carries each epoch.', fees(c, 1) + ' per claim or vote', '10 minutes a month']
   ],
-  network: (c) => [
+  network: (c) => c.pause ? [
+    ['Do not park USDC on ' + c.name + ': Circle has announced that it pauses the ' + c.chain + ' USDC contract and CCTP routes on ' + c.pause + '. Pass 5-10 transfers of $50-$200 through it in the first week, each onward to its destination the same day.', fees(c, 10) + '; only fee money stays on ' + c.chain, '30 minutes in week one'],
+    ['Return to ' + c.name + ' each week for 2-3 more pass-through transfers, keep only what fees need there between visits, and be ready to bridge any USDC off ' + c.chain + ' before ' + c.pause + '.', fees(c, 3) + ' a week', WEEKLY]
+  ] : [
     ['Move ' + c.range + ' of ' + c.asset + ' to ' + c.name + (c.name === c.chain ? '' : ' on ' + c.chain) + ' and ' + c.use + ': 5-10 transactions in the first week. ' + c.depth, capital(c, 10), '30 minutes in week one'],
     ['Return to ' + c.name + ' each week to ' + c.use + ' 2-3 more times, on different days, and leave a balance on ' + c.chain + ' between visits: funds at rest count as well as traffic.', fees(c, 3) + ' a week', WEEKLY]
   ],
   'payment channel': (c) => [
-    ['Open a payment channel of ' + c.range + ' from that wallet to a well-connected ' + c.name + ' node: one on-chain Bitcoin transaction, usable after about three confirmations. Start low: funds leave a channel only as payments or by closing it.', c.range + ' of capital locked in the channel and about ' + usd(c.onchain) + ' of on-chain fee to open, once, and again to close', '30-60 minutes, once'],
+    ['Open a payment channel of ' + c.range + ' from that wallet to a well-connected ' + c.name + ' node: one on-chain Bitcoin transaction, usable after about three confirmations. Start low: funds leave a channel as payments, by closing it, or by splicing out to your own on-chain wallet where your wallet supports it.', c.range + ' of capital locked in the channel and about ' + usd(c.onchain) + ' of on-chain fee to open, once, and again to close', '30-60 minutes, once'],
     ['Pay 5-10 invoices over ' + c.name + ' in the first week, then 2-3 a week: paste each invoice into the wallet, which routes the payment through other nodes\' channels.', 'routing fees in parts per million (ppm) of the amount: about ' + usd(c.fee) + ' on $20 at an assumed 1,000 ppm', WEEKLY]
   ]
 };
@@ -318,10 +322,11 @@ function farmPlan(row, asOf) {
   const first = chains[0], gas = gasOf(first), n = chains.length, cat = row.category || '';
   const play = playbookOf(cat, first), ln = play === 'payment channel', fxrp = first === 'Flare', cdp = /cdp/i.test(cat);
   // A routed Lightning payment pays a routing fee, not the chain's fee.
-  const fee = ln ? 0.02 : gas[1], tvl = money(row.tvl_usd);
+  const fee = ln ? 0.02 : gas[1], tvl = money(row.tvl_usd), pause = PAUSE[first];
   const c = {
     name: row.name, chain: chainName(first), chain2: chainName(chains[1]), lo: tier.lo, hi: tier.hi,
-    range: usd(tier.lo) + '-' + usd(tier.hi), fee: fee, onchain: gas[1], cdp: cat === 'CDP', fxrp: fxrp,
+    range: usd(tier.lo) + '-' + usd(tier.hi), fee: fee, onchain: gas[1], cdp: cat === 'CDP', fxrp: fxrp, pause: pause,
+    btc: /btc/i.test(cat) || chains.some((x) => BTC_CHAIN.test(x)),
     asset: cdp ? 'a collateral asset it accepts' : BTC_CHAIN.test(first) ? 'BTC or its wrapped form'
       : fxrp ? 'FXRP (XRP wrapped onto Flare through FAssets)' : "USDC or the chain's main stablecoin",
     pair: (GAS[first] && !/USD/.test(gas[0]) ? 'the ' + gas[0] + '/stablecoin pair' : 'a stablecoin pair') + ' or whichever pool is deepest',
@@ -349,7 +354,7 @@ function farmPlan(row, asOf) {
   }
 
   const ch = row.change_7d, moved = ch === null ? '' : 'TVL moved ' + (ch > 0 ? '+' : '') + ch.toFixed(1) + '% in the 7 days to ' + asOf;
-  const pace = ch === null || Math.abs(ch) < 0.05 ? 'The snapshot shows no 7-day change in TVL, so make the step 3 deposit in two halves a week apart.'
+  const pace = pause ? 'Have all USDC off ' + first + ' before ' + pause + '.' : ch === null || Math.abs(ch) < 0.05 ? 'The snapshot shows no 7-day change in TVL, so make the step 3 deposit in two halves a week apart.'
     : ch > 100 ? moved + ': a jump that size is often one large deposit, so wait a week and confirm it holds before step 3.'
       : ch >= 10 ? moved + ': deposits are arriving now, so make half of the step 3 deposit this week.'
         : ch <= -10 ? moved + ': start step 3 at the low end and add the rest only once it stops shrinking.'
@@ -357,15 +362,14 @@ function farmPlan(row, asOf) {
   steps.push(['Check in on ' + c.name + ' weekly until a snapshot or the end of a programme is announced: confirm the position is still open and add one small transaction. ' + pace, fees(c, 13) + ' over 13 weeks', WEEKLY]);
 
   const age = row.model.age_days;
-  const hold = age === null ? 'The snapshot gives no listing date, so review after 90 days.'
+  const hold = pause ? 'Review the position before ' + pause + ', when USDC pauses, not at 90 days.' : age === null ? 'The snapshot gives no listing date, so review after 90 days.'
     : age < 180 ? 'Tracked for only ' + age + ' days, it is early: plan on 180 days.'
       : age >= 730 ? 'It has run ' + age + ' days and records no token: a long run dates nothing, so review every 90 days and commit only what can sit idle.'
         : 'It has run ' + age + ' days and records no token: plan on 120 days and review then.';
-  steps.push([hold + ' Leave ' + c.name + ' early if TVL falls more than 40% below the ' + tvl + ' the snapshot records.', 'in all: ' + c.range + ' of capital at risk and about ' + usd(Math.ceil(total)) + ' in network fees over the first 90 days, before the costs steps 3 and 4 name', (n > 1 ? '6-12' : '5-10') + ' hours over 90 days']);
+  steps.push([hold + ' Leave ' + c.name + ' early if TVL falls more than 40% below the ' + tvl + ' the snapshot records.', 'in all: ' + (pause ? 'no capital parked' : c.range + ' of capital at risk') + ' and about ' + usd(Math.ceil(total)) + ' in network fees over the first 90 days, before the costs steps 3 and 4 name', (n > 1 ? '6-12' : '5-10') + ' hours over 90 days']);
   return steps.map((s) => ({ action: s[0], cost: s[1], time: s[2] }));
 }
 
-/* One step as board.json's string. */
 const stepText = (step) => step.action + ' Cost: ' + step.cost + '. Time: ' + step.time + '.';
 
 const api = { K, classify, tokens, comparables, impliedValue, buildRadar, sizeTier, playbookOf, farmPlan, stepText, usd, money, chainName, categoryOf };

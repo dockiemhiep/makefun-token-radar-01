@@ -153,7 +153,7 @@ export function methodNote(radar: Radar): string {
   return (
     `Implied launch value = TVL x the market-cap/TVL multiple of the protocol's category (median of the ${c.n} tokens in the snapshot that trade, each on the TVL summed over its records, ` +
     `shrunk toward the global median ${c.global.median}) x bounded factors for size (elasticity ${c.elasticity}), 7-day TVL momentum, days listed with no token, and chain breadth. ` +
-    `The board ranks the ${radar.counts.candidate} protocols that record no token; ${radar.counts.priced} priced, ${radar.counts.ticker} with a ticker on record, ${radar.counts.product} exchange, bridge, wrapped, staked or versioned products, ` +
+    `The board ranks the ${radar.counts.candidate} protocols that record no token; ${radar.counts.priced} priced, ${radar.counts.ticker} with a ticker on record, ${radar.counts.product} exchange, bridge, wrapped, staked, restaking or versioned products, ` +
     `${radar.counts.family} sharing a brand with a protocol that records a token and ${radar.counts.parent} at or above the watchlist's floor yet left off it by the house rule are set aside.`
   );
 }

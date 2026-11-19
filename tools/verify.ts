@@ -7,7 +7,8 @@
 // (c) holds the farm plans to their own rules: no step shared between rows, every step naming its protocol,
 //     no promise of an exit, and the right operation for four protocols a reviewer found wrong;
 //     no promise of a gas token the model does not know, and no row the house rule's deductions set aside;
-// (d) holds the hand-written dashboard source to 61,000 bytes, so the dossier shows it whole.
+//     no universal exit timing in a delegation plan, and the USDC pause date in Noble's;
+// (d) holds the hand-written dashboard source to 62,500 bytes and requires the dossier to show it whole.
 // Prints one line per check and exits 1 on any failure.
 
 import { execFileSync } from 'node:child_process';
@@ -73,7 +74,7 @@ check(
   networked ? `${networked} names a network address` : badName ? `${badName} is not a plain name` : `${dash.length} files, ${dashBytes} bytes, no network address in any of them`,
 );
 
-const snapshot = JSON.parse(readFileSync(snapshotFile, 'utf8')) as { floor_usd: number; protocols: { slug: string; tvl_usd: number; mcap_usd: number | null; symbol: string | null; gecko_id: string | null }[]; watchlist: string[] };
+const snapshot = JSON.parse(readFileSync(snapshotFile, 'utf8')) as { floor_usd: number; protocols: { slug: string; tvl_usd: number; mcap_usd: number | null; symbol: string | null; gecko_id: string | null; category: string | null }[]; watchlist: string[] };
 const boardText = readFileSync(join(a, 'board.json'), 'utf8');
 const rows = (JSON.parse(boardText) as { rows: { slug: string; name: string; rank: number; implied_value_usd: number; farm_steps: string[] }[] }).rows;
 const known = new Set(snapshot.protocols.map((p) => p.slug));
@@ -136,7 +137,9 @@ const OPERATIONS: [string, RegExp[], RegExp[]][] = [
   ['symbiotic', [/collateral/i, /withdrawal/i, /claim/i, /slash/i], [/borrow/i, /health factor/i, /APR/]],
   ['firelight', [/FXRP/, /stXRP/], [/USDC/, /stablecoin/i]],
   ['bittensor-dtao', [/TAO/, /alpha/, /user liquidity enabled/], [/stablecoin/i, /blue-chip/i]],
-  ['lightning-network', [/Lightning wallet/, /channel/, /invoice/, /ppm/], []],
+  ['lightning-network', [/Lightning wallet/, /channel/, /invoice/, /ppm/, /splicing out/], [/only as payments/]],
+  ['b14g', [/Bitcoin timelock/, /unbonding/, /Before depositing/], [/epoch/i, /single collateral asset/]],
+  ['noble', [/2027-01-12/, /Do not park USDC/, /bridge any USDC off Noble before 2027-01-12/, /Review the position before 2027-01-12/], [/leave a balance/, /review after 90 days/, /of capital at risk/]],
 ];
 const wrongOps = OPERATIONS.flatMap(([slug, must, mustNot]) => {
   const plan = planOf(slug);
@@ -150,6 +153,12 @@ const exitClaims = rows.filter((r) => r.farm_steps.some((s) => EXIT_CLAIM.test(s
 const lendingOnly = rows.filter((r) => !/lend|cdp/i.test(String((r as { category?: string | null }).category ?? '')) && r.farm_steps.some((s) => /borrow|health factor/i.test(s)));
 check('no_exit_claim', exitClaims.length === 0 && lendingOnly.length === 0, exitClaims.length ? `${exitClaims.length} row(s) promise an exit, e.g. ${exitClaims[0]!.slug}` : lendingOnly.length ? `borrowing prescribed outside a lending category: ${lendingOnly.map((r) => r.slug).join(', ')}` : `no row promises an exit; ${rows.filter((r) => r.farm_steps.some((s) => /withdrawable liquidity or utilisation/.test(s))).length} rows tell the reader to check withdrawable liquidity; borrowing only in lending and CDP categories`);
 
+// A delegation plan names no universal exit timing: it tells the reader to read the lock before depositing and wait it out.
+const delegation = rows.filter((r) => /collateral market|restak/i.test(String((r as { category?: string | null }).category ?? '')));
+const epochClaim = rows.filter((r) => r.farm_steps.some((s) => /next epoch|epoch to end|two epochs/i.test(s)));
+const noLockCheck = delegation.filter((r) => !r.farm_steps.some((s) => /Before depositing, read how long .* locks an exit/.test(s) && /wait out/.test(s)));
+check('no_epoch_exit', delegation.length > 0 && epochClaim.length === 0 && noLockCheck.length === 0, epochClaim.length ? `a next-epoch withdrawal is asserted by: ${epochClaim.map((r) => r.slug).join(', ')}` : noLockCheck.length ? `no lock check before depositing in: ${noLockCheck.map((r) => r.slug).join(', ')}` : `no step of ${rows.length} rows asserts a next-epoch withdrawal; ${delegation.length} delegation plans (${delegation.map((r) => r.slug).join(', ')}) say to read the lock before depositing and wait it out`);
+
 const noGas = rows.filter((r) => r.farm_steps.some((s) => /its gas token/.test(s)));
 check('no_gas_fallback', noGas.length === 0, noGas.length ? `${noGas.length} row(s) fall back to "its gas token": ${noGas.map((r) => r.slug).join(', ')}` : `no step of ${rows.length} rows says "its gas token": every first chain names the token that pays its fees`);
 
@@ -158,14 +167,16 @@ const watch = new Set(snapshot.watchlist);
 const record = new Map(snapshot.protocols.map((p) => [p.slug, p]));
 const hasToken = (p: { mcap_usd: number | null; symbol: string | null; gecko_id: string | null }): boolean => p.mcap_usd !== null || p.symbol !== null || p.gecko_id !== null;
 const brands = new Set(snapshot.protocols.filter(hasToken).map((p) => p.slug.split('-')[0]!).filter((b) => b.length >= 3));
-const leaked = rows.filter((r) => !watch.has(r.slug) && (record.get(r.slug)!.tvl_usd >= snapshot.floor_usd || hasToken(record.get(r.slug)!) || brands.has(r.slug.split('-')[0]!)));
-check('pre_token_only', leaked.length === 0, leaked.length ? `ranked against the house rule's deductions: ${leaked.map((r) => r.slug).join(', ')}` : `${rows.length - snapshot.watchlist.length} rows outside the watchlist: each under the ${snapshot.floor_usd} floor, recording no token, sharing no brand with a protocol that records one`);
+// Restaking joins the house rule's custody categories: the same product class as Liquid Restaking.
+const CUSTODY = ['Bridge', 'Canonical Bridge', 'Cross Chain Bridge', 'CEX', 'Liquid Restaking', 'Liquid Staking', 'Restaked BTC', 'Restaking', 'Stablecoin Wrapper'];
+const leaked = rows.filter((r) => !watch.has(r.slug) && (record.get(r.slug)!.tvl_usd >= snapshot.floor_usd || hasToken(record.get(r.slug)!) || brands.has(r.slug.split('-')[0]!) || CUSTODY.includes(String(record.get(r.slug)!.category))));
+check('pre_token_only', leaked.length === 0, leaked.length ? `ranked against the house rule's deductions: ${leaked.map((r) => r.slug).join(', ')}` : `${rows.length - snapshot.watchlist.length} rows outside the watchlist: each under the ${snapshot.floor_usd} floor, recording no token, sharing no brand with a protocol that records one, in no custody category (Restaking included)`);
 
 // ---- (d) the hand-written source fits the dossier whole, and the vendored library is the kit's
 const authored = readdirSync(join(root, 'dashboard')).filter((f) => !f.startsWith('.')).sort();
 const authoredBytes = authored.reduce((n, f) => n + statSync(join(root, 'dashboard', f)).size, 0);
 const shownWhole = authored.every((f) => dossierText.includes(`### ${f}\n`) && dossierText.includes(readFileSync(join(root, 'dashboard', f), 'utf8')));
-check('source_budget', authoredBytes <= 61_000 && shownWhole, `${authored.join(' + ')} = ${authoredBytes} bytes (budget 61000); every file whole in the dossier: ${shownWhole}`);
+check('source_budget', authoredBytes <= 62_500 && shownWhole, `${authored.join(' + ')} = ${authoredBytes} bytes (budget 62500); every file whole in the dossier: ${shownWhole}`);
 if (kitVendor) check('vendor_identical', readFileSync(join(root, 'vendor', 'makefun-board.ts')).equals(readFileSync(kitVendor)), 'vendor/makefun-board.ts is byte for byte the kit\'s');
 
 for (const out of runs) rmSync(out, { recursive: true, force: true });

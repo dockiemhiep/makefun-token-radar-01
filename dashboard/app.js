@@ -43,7 +43,7 @@ const ratio = (r) => (r.mcap_usd > 0 ? r.mcap_usd / tokenTvl(r) : null);
 const WHY = {
   priced: (r) => 'Its token trades: a comparable' + (r.ledgers > 1 ? ', priced on ' + money(tokenTvl(r)) + ' across ' + r.ledgers + ' records' : ''),
   ticker: (r) => 'Records the ticker ' + esc(r.symbol || 'by CoinGecko id') + ', no market cap',
-  product: () => 'Exchange, bridge, wrapper or versioned pool',
+  product: () => 'Exchange, bridge, wrapper, restaking or versioned pool',
   family: (r) => 'Shares its brand with ' + esc(r.kin) + ', which records a token',
   parent: () => 'At the ' + money(D.floor_usd) + ' floor yet off the watchlist: the house rule\'s parent-protocol test'
 };
