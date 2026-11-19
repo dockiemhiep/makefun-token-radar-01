@@ -24,7 +24,7 @@
 </header>
 
 <section class="universe" aria-labelledby="universe-title">
-  <h2 id="universe-title">All <span id="universe-total"></span> protocols in the snapshot, each sorted into one of four sets</h2>
+  <h2 id="universe-title">All <span id="universe-total"></span> protocols in the snapshot, each sorted into one of six sets</h2>
   <div class="bar" id="universe-bar" role="img" aria-label="Share of protocols in each set"></div>
   <ul class="legend" id="universe-legend"></ul>
 </section>
@@ -64,7 +64,7 @@
       <p class="formula">implied value = TVL <i>&times;</i> category multiple<br><i>&times;</i> size <i>&times;</i> momentum <i>&times;</i> maturity <i>&times;</i> breadth</p>
       <dl class="terms">
         <dt>Category multiple</dt>
-        <dd>Median market cap / TVL of the category's priced protocols, shrunk toward the median of all <b data-k="n"></b> (<b data-k="global"></b>). Under 3 priced: that global median.</dd>
+        <dd>Median market cap / TVL of the category's priced tokens, each on its summed TVL, shrunk toward the median of all <b data-k="n"></b> (<b data-k="global"></b>). Under 3 priced: that global median.</dd>
         <dt>Size <span data-k="size"></span></dt>
         <dd>Market cap grows as TVL<sup data-k="b"></sup> across the comparables; half of that discount is applied to larger protocols.</dd>
         <dt>Momentum <span data-k="momentum"></span></dt>
@@ -74,7 +74,7 @@
         <dt>Breadth <span data-k="breadth"></span></dt>
         <dd>+3% for each doubling of the chain count.</dd>
       </dl>
-      <p class="note">Every input is a field of the snapshot; no protocol is named in the model. A value is a claim, not a forecast of a launch.</p>
+      <p class="note">Every input is a field of the snapshot; no value is set by hand. A value is a claim, not a forecast of a launch.</p>
     </section>
     <section class="card" aria-labelledby="comps-title">
       <h2 id="comps-title">Comparable multiples</h2>

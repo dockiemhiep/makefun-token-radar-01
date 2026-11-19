@@ -19,5 +19,6 @@ shoot() { # <file name> <hash>
 }
 
 shoot 1-board.png ''
-shoot 2-detail.png "#p=${DETAIL_SLUG:-steakhouse-financial}"
-shoot 3-filtered.png "#${FILTER_HASH:-cat=Derivatives}"
+# The defaults are the views the committed screenshots show.
+shoot 2-detail.png "#p=${DETAIL_SLUG:-onre}"
+shoot 3-filtered.png "#${FILTER_HASH:-cat=Risk+Curators&wl=1}"

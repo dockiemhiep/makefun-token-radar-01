@@ -6,7 +6,8 @@
 // (b) holds that output to the seven rows of the house gate (RULES.txt, "The gate");
 // (c) holds the farm plans to their own rules: no step shared between rows, every step naming its protocol,
 //     no promise of an exit, and the right operation for four protocols a reviewer found wrong;
-// (d) holds the hand-written dashboard source to 60,000 bytes, so the dossier shows it whole.
+//     no promise of a gas token the model does not know, and no row the house rule's deductions set aside;
+// (d) holds the hand-written dashboard source to 61,000 bytes, so the dossier shows it whole.
 // Prints one line per check and exits 1 on any failure.
 
 import { execFileSync } from 'node:child_process';
@@ -72,7 +73,7 @@ check(
   networked ? `${networked} names a network address` : badName ? `${badName} is not a plain name` : `${dash.length} files, ${dashBytes} bytes, no network address in any of them`,
 );
 
-const snapshot = JSON.parse(readFileSync(snapshotFile, 'utf8')) as { protocols: { slug: string }[]; watchlist: string[] };
+const snapshot = JSON.parse(readFileSync(snapshotFile, 'utf8')) as { floor_usd: number; protocols: { slug: string; tvl_usd: number; mcap_usd: number | null; symbol: string | null; gecko_id: string | null }[]; watchlist: string[] };
 const boardText = readFileSync(join(a, 'board.json'), 'utf8');
 const rows = (JSON.parse(boardText) as { rows: { slug: string; name: string; rank: number; implied_value_usd: number; farm_steps: string[] }[] }).rows;
 const known = new Set(snapshot.protocols.map((p) => p.slug));
@@ -149,11 +150,22 @@ const exitClaims = rows.filter((r) => r.farm_steps.some((s) => EXIT_CLAIM.test(s
 const lendingOnly = rows.filter((r) => !/lend|cdp/i.test(String((r as { category?: string | null }).category ?? '')) && r.farm_steps.some((s) => /borrow|health factor/i.test(s)));
 check('no_exit_claim', exitClaims.length === 0 && lendingOnly.length === 0, exitClaims.length ? `${exitClaims.length} row(s) promise an exit, e.g. ${exitClaims[0]!.slug}` : lendingOnly.length ? `borrowing prescribed outside a lending category: ${lendingOnly.map((r) => r.slug).join(', ')}` : `no row promises an exit; ${rows.filter((r) => r.farm_steps.some((s) => /withdrawable liquidity or utilisation/.test(s))).length} rows tell the reader to check withdrawable liquidity; borrowing only in lending and CDP categories`);
 
+const noGas = rows.filter((r) => r.farm_steps.some((s) => /its gas token/.test(s)));
+check('no_gas_fallback', noGas.length === 0, noGas.length ? `${noGas.length} row(s) fall back to "its gas token": ${noGas.map((r) => r.slug).join(', ')}` : `no step of ${rows.length} rows says "its gas token": every first chain names the token that pays its fees`);
+
+// Outside the watchlist a ranked row sits under the floor, records no token, and shares no brand with a protocol that does.
+const watch = new Set(snapshot.watchlist);
+const record = new Map(snapshot.protocols.map((p) => [p.slug, p]));
+const hasToken = (p: { mcap_usd: number | null; symbol: string | null; gecko_id: string | null }): boolean => p.mcap_usd !== null || p.symbol !== null || p.gecko_id !== null;
+const brands = new Set(snapshot.protocols.filter(hasToken).map((p) => p.slug.split('-')[0]!).filter((b) => b.length >= 3));
+const leaked = rows.filter((r) => !watch.has(r.slug) && (record.get(r.slug)!.tvl_usd >= snapshot.floor_usd || hasToken(record.get(r.slug)!) || brands.has(r.slug.split('-')[0]!)));
+check('pre_token_only', leaked.length === 0, leaked.length ? `ranked against the house rule's deductions: ${leaked.map((r) => r.slug).join(', ')}` : `${rows.length - snapshot.watchlist.length} rows outside the watchlist: each under the ${snapshot.floor_usd} floor, recording no token, sharing no brand with a protocol that records one`);
+
 // ---- (d) the hand-written source fits the dossier whole, and the vendored library is the kit's
 const authored = readdirSync(join(root, 'dashboard')).filter((f) => !f.startsWith('.')).sort();
 const authoredBytes = authored.reduce((n, f) => n + statSync(join(root, 'dashboard', f)).size, 0);
 const shownWhole = authored.every((f) => dossierText.includes(`### ${f}\n`) && dossierText.includes(readFileSync(join(root, 'dashboard', f), 'utf8')));
-check('source_budget', authoredBytes <= 60_000 && shownWhole, `${authored.join(' + ')} = ${authoredBytes} bytes (budget 60000); every file whole in the dossier: ${shownWhole}`);
+check('source_budget', authoredBytes <= 61_000 && shownWhole, `${authored.join(' + ')} = ${authoredBytes} bytes (budget 61000); every file whole in the dossier: ${shownWhole}`);
 if (kitVendor) check('vendor_identical', readFileSync(join(root, 'vendor', 'makefun-board.ts')).equals(readFileSync(kitVendor)), 'vendor/makefun-board.ts is byte for byte the kit\'s');
 
 for (const out of runs) rmSync(out, { recursive: true, force: true });

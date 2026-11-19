@@ -83,6 +83,6 @@ writeFileSync(join(out, 'dossier.json'), buildDossier(out, DOSSIER_CAPS));
 const top = rows[0]!;
 process.stdout.write(
   `token radar: ${snapshot.protocols.length} protocols read; ${radar.counts.candidate} record no token and are ranked, ` +
-    `${radar.counts.priced + radar.counts.ticker + radar.counts.product} set aside; watchlist ${snapshot.watchlist.length}/${snapshot.watchlist.length} covered\n` +
+    `${snapshot.protocols.length - radar.counts.candidate} set aside; watchlist ${snapshot.watchlist.length}/${snapshot.watchlist.length} covered\n` +
     `token radar: rank 1 ${top.slug} at $${top.implied_value_usd}; wrote board.json, dashboard/ (${pageFiles.length + 1} files), screenshots/ (${shots.length}) and dossier.json to ${out}\n`,
 );

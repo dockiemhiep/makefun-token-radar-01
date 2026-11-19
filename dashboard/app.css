@@ -1,5 +1,5 @@
-/* Token Launch Radar. One dark theme: blue-slate ground, amber for implied value alone, teal for the
-   watchlist and rising TVL, coral for falling. Spacing steps: 4 8 12 16 24. */
+/* Token Launch Radar. Blue-slate ground, amber for implied value alone, teal for the watchlist and rising
+   TVL, coral for falling. Spacing steps: 4 8 12 16 24. */
 :root {
   color-scheme: dark;
   --ground: #0d1620;
@@ -41,17 +41,19 @@ h1 { font-size: 24px; line-height: 1.2; font-weight: 600; letter-spacing: -.01em
 .facts dt, .d-stats dt { color: var(--muted); font-size: 12px; white-space: nowrap; }
 .facts dd { font: 600 18px/1.3 var(--figures); font-variant-numeric: tabular-nums; }
 
-/* ---- the universe bar: how the snapshot's protocols are sorted */
+/* ---- the universe bar */
 .universe { margin: 16px 0; display: grid; grid-template-columns: auto 1fr; gap: 8px 24px; align-items: center; }
 .universe h2 { font-size: 13px; font-weight: 500; color: var(--muted); }
 .bar { display: flex; gap: 2px; height: 10px; }
 .bar i { border-radius: 2px; }
 .legend { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 4px 24px; color: var(--muted); font-size: 13px; }
 .legend li::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 8px; }
-.bar i, .legend li::before { background: #33495d; }
-.bar .s-candidate, .legend .s-candidate::before { background: var(--value); }
-.bar .s-priced, .legend .s-priced::before { background: #6c8fab; }
-.bar .s-ticker, .legend .s-ticker::before { background: #47637b; }
+.bar i, .legend li::before { background: var(--set, #33495d); }
+.s-candidate { --set: var(--value); }
+.s-priced { --set: #6c8fab; }
+.s-ticker { --set: #47637b; }
+.s-family { --set: #8a6fb0; }
+.s-parent { --set: #b07a6f; }
 .legend b { color: var(--text); font-family: var(--figures); }
 
 /* ---- layout */
@@ -94,10 +96,13 @@ table { border-collapse: collapse; width: 100%; }
 #board.ranked tbody tr:hover { background: var(--raised); }
 .c-rank { color: var(--muted); width: 52px; }
 .c-name { max-width: 264px; overflow: hidden; text-overflow: ellipsis; }
-.c-category, .c-chains { color: var(--muted); font-size: 13px; max-width: 172px; overflow: hidden; text-overflow: ellipsis; }
+.c-category, .c-chains { color: var(--muted); font-size: 13px; max-width: 204px; overflow: hidden; text-overflow: ellipsis; }
+#board .c-set { white-space: normal; min-width: 260px; }
 .open { border: 0; background: none; padding: 0; font-weight: 600; cursor: pointer; }
 .open:hover { text-decoration: underline; }
-.more { color: var(--faint); font-size: 12px; }
+.chains { display: flex; gap: 4px; align-items: baseline; }
+.chains > :first-child { overflow: hidden; text-overflow: ellipsis; }
+.more { color: var(--faint); font-size: 12px; flex: none; }
 .badge { display: inline-block; margin-left: 8px; padding: 0 6px; border: 1px solid var(--signal); border-radius: 4px; color: var(--signal); font: 500 11px/16px var(--sans); vertical-align: 1px; }
 .c-implied_value_usd { width: 150px; }
 .value { color: var(--value); font-weight: 600; }
@@ -107,7 +112,7 @@ table { border-collapse: collapse; width: 100%; }
 .empty { padding: 48px 24px; text-align: center; color: var(--muted); }
 .empty p { margin-bottom: 12px; }
 
-/* ---- the rail: the method and the comparables */
+/* ---- the rail */
 .rail { display: grid; gap: 16px; }
 .card { padding: 12px 16px 16px; }
 .card h2 { font-size: 15px; font-weight: 600; margin-bottom: 8px; }

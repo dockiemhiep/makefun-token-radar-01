@@ -68,14 +68,19 @@ export interface AsideRow {
   tvl_usd: number;
   mcap_usd: number | null;
   symbol: string | null;
-  set: 'priced' | 'ticker' | 'product';
+  set: 'priced' | 'ticker' | 'product' | 'family' | 'parent';
+  /** A priced row: the TVL of every record that carries its token, and how many records that is. */
+  token_tvl_usd?: number;
+  ledgers?: number;
+  /** A family row: the protocol whose recorded token names the brand. */
+  kin?: string;
 }
 
 export interface Radar {
   as_of: string;
   floor_usd: number;
   total: number;
-  counts: { priced: number; ticker: number; product: number; candidate: number };
+  counts: { priced: number; ticker: number; product: number; family: number; parent: number; candidate: number };
   constants: Record<string, unknown>;
   comparables: Record<string, unknown>;
   rows: RadarRow[];
@@ -146,9 +151,10 @@ export function buildRadar(snapshot: Snapshot): Radar {
 export function methodNote(radar: Radar): string {
   const c = radar.comparables as { n: number; global: { median: number }; elasticity: number };
   return (
-    `Implied launch value = TVL x the market-cap/TVL multiple of the protocol's category (median of the ${c.n} protocols in the snapshot whose token trades, ` +
+    `Implied launch value = TVL x the market-cap/TVL multiple of the protocol's category (median of the ${c.n} tokens in the snapshot that trade, each on the TVL summed over its records, ` +
     `shrunk toward the global median ${c.global.median}) x bounded factors for size (elasticity ${c.elasticity}), 7-day TVL momentum, days listed with no token, and chain breadth. ` +
-    `The board ranks the ${radar.counts.candidate} protocols that record no token; ${radar.counts.priced} priced, ${radar.counts.ticker} with a ticker on record and ${radar.counts.product} exchange, bridge, wrapped, staked or versioned products are set aside.`
+    `The board ranks the ${radar.counts.candidate} protocols that record no token; ${radar.counts.priced} priced, ${radar.counts.ticker} with a ticker on record, ${radar.counts.product} exchange, bridge, wrapped, staked or versioned products, ` +
+    `${radar.counts.family} sharing a brand with a protocol that records a token and ${radar.counts.parent} at or above the watchlist's floor yet left off it by the house rule are set aside.`
   );
 }
 
@@ -212,7 +218,6 @@ export function dataScript(radar: Radar, snapshot: Snapshot): string {
     total: radar.total,
     counts: radar.counts,
     watchlist_size: snapshot.watchlist.length,
-    method: methodNote(radar),
     constants: radar.constants,
     comparables: radar.comparables,
   };
