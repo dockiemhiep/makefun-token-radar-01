@@ -18,8 +18,8 @@ last is ranked:
 
 | Set | Protocols | Why |
 | --- | ---: | --- |
-| Priced | 144 | The token trades and a market cap is on record. These are the comparables. |
-| Ticker on record | 272 | A ticker or CoinGecko id is recorded, with no market cap. A token already exists. |
+| Priced | 128 | The token trades and a market cap above zero is on record. These are the comparables. |
+| Ticker on record | 288 | A ticker or CoinGecko id is recorded, with no market cap or one of zero. A token already exists. |
 | Products | 144 | An exchange, a bridge, a wrapped or staked product, or a versioned pool of another protocol. |
 | Ranked | 198 | Records no token at all. All 40 protocols of the snapshot's watchlist are among them. |
 
@@ -34,7 +34,7 @@ implied value = TVL x category multiple x size x momentum x maturity x breadth
 
 | Term | Range | Where it comes from |
 | --- | --- | --- |
-| Category multiple | 0.09x to 0.51x on this board | Median market cap / TVL of the priced protocols in the same category, shrunk toward the global median (0.21x across 128 comparables) as if 4 more comparables sat at it. Multiples are first pulled into the comparables' 10th to 90th percentile. A category with no priced protocol uses the global median. |
+| Category multiple | 0.15x to 0.51x on this board | Median market cap / TVL of the priced protocols in the same category, shrunk toward the global median (0.21x across 128 comparables) as if 4 more comparables sat at it. Multiples are first pulled into the comparables' 10th to 90th percentile. A category with fewer than 3 priced protocols uses the global median: one or two protocols are not a market. |
 | Size | 0.35 to 1.50 | Across the comparables market cap grows as TVL^0.52, so a flat multiple would overvalue the giants. Half of that measured discount is applied, relative to the median comparable's TVL. |
 | Momentum | 0.85 to 1.15 | Half of the 7-day TVL change, clamped to +/-30%. No change on record is neutral. |
 | Maturity | 0.80 to 1.20 | Days since `listed_at`: the longer a protocol has run while recording no token, the stronger its launch claim. Full weight at 3 years; no date is neutral. |

@@ -55,13 +55,13 @@
       ['change_7d', '7d TVL', 1, (r) => r.change_7d, (r) => pct(r.change_7d)],
       ['age', 'Listed for', 1, (r) => r.model.age_days, (r) => age(r.model.age_days)],
       ['implied_value_usd', 'Implied value', 1, (r) => r.implied_value_usd, (r, max) => '<span class="value">' + money(r.implied_value_usd) + '</span>' +
-        '<span class="meter"><i style="width:' + Math.max(2, 100 * r.implied_value_usd / max).toFixed(1) + '%"></i></span>']
+        '<span class="meter"><i style="width:' + (100 * Math.sqrt(r.implied_value_usd / max)).toFixed(1) + '%"></i></span>']
     ],
     aside: [
       ['name', 'Protocol', 0, (r) => r.name.toLowerCase(), (r) => esc(r.name)],
       ['category', 'Category', 0, (r) => cat(r).toLowerCase(), (r) => esc(cat(r))],
       ['tvl_usd', 'TVL', 1, (r) => r.tvl_usd, (r) => money(r.tvl_usd)],
-      ['mcap_usd', 'Market cap', 1, (r) => r.mcap_usd, (r) => (r.mcap_usd === null ? none('none') : money(r.mcap_usd))],
+      ['mcap_usd', 'Market cap', 1, (r) => r.mcap_usd, (r) => (r.mcap_usd > 0 ? money(r.mcap_usd) : none('none'))],
       ['ratio', 'Mcap / TVL', 1, ratio, (r) => (ratio(r) === null ? none('none') : x(ratio(r)))],
       ['set', 'Why it is not ranked', 0, (r) => r.set, (r) => (r.set === 'priced' ? 'Its token trades: a comparable'
         : r.set === 'ticker' ? 'Records the ticker ' + esc(r.symbol || 'by CoinGecko id') + ', no market cap' : 'Exchange, bridge, wrapper or versioned pool')]
@@ -72,14 +72,13 @@
   /* ---- the hash ---- */
 
   function readHash() {
-    const h = new URLSearchParams(location.hash.slice(1)), sort = (h.get('sort') || '').split(':');
+    const h = new URLSearchParams(location.hash.slice(1));
     state.view = h.get('view') === 'aside' ? 'aside' : 'ranked';
     state.q = h.get('q') || '';
     state.cat = h.get('cat') || '';
     state.chain = h.get('chain') || '';
     state.wl = h.get('wl') === '1';
-    state.sort = sort[0] || firstSort()[0];
-    state.dir = sort[1] === 'desc' ? -1 : sort[1] === 'asc' ? 1 : firstSort()[1];
+    [state.sort, state.dir] = firstSort();
     state.open = bySlug[h.get('p')] ? h.get('p') : '';
   }
   function writeHash() {
@@ -87,7 +86,6 @@
     if (state.view === 'aside') h.set('view', 'aside');
     for (const k of ['q', 'cat', 'chain']) if (state[k]) h.set(k, state[k]);
     if (state.wl) h.set('wl', '1');
-    if (state.sort !== firstSort()[0] || state.dir !== firstSort()[1]) h.set('sort', state.sort + ':' + (state.dir < 0 ? 'desc' : 'asc'));
     if (state.open) h.set('p', state.open);
     const text = h.toString();
     history.replaceState(null, '', text ? '#' + text : location.pathname + location.search);
@@ -141,7 +139,7 @@
     $('board').className = state.view;
     $('empty').hidden = shown.length > 0;
     $('caption').textContent = ranked ? 'Protocols that record no token, ranked by implied launch value' : 'Protocols the board does not rank, and why';
-    const filtered = state.q || state.cat || state.chain || state.wl;
+    const filtered = state.q.trim() || state.cat || (ranked && (state.chain || state.wl));
     $('count').innerHTML = '<b>' + shown.length + '</b> of ' + source.length + (ranked ? ' ranked protocols' : ' protocols set aside') +
       (filtered ? ' match the filters' : ranked ? '. Select a protocol for its working and its farm plan.' : ': a token is already on record, or the protocol is a product of another.');
     $('view-ranked').setAttribute('aria-pressed', ranked);
@@ -167,32 +165,33 @@
   /* One protocol: the value's derivation line by line, the priced protocols behind its multiple, and its farm plan. */
   function renderDetail(r) {
     const w = r.model, comps = D.comparables, group = comps.by[cat(r)];
-    const at = shown.indexOf(r), plan = M.farmPlan(r, D.as_of), tier = M.sizeTier(r.tvl_usd);
+    const plan = M.farmPlan(r, D.as_of), tier = M.sizeTier(r.tvl_usd);
     const peers = D.aside.filter((p) => p.mcap_usd > 0 && cat(p) === cat(r));
     const ledger = [
       ['TVL', money(r.tvl_usd), 'tvl_usd in the snapshot'],
-      ['× Category multiple', factor(w.multiple), group ? 'median ' + x(group.median) + ' of ' + group.n + ' priced, shrunk toward the global ' + x(comps.global.median) : 'no priced protocol in the category: the global median'],
+      ['× Category multiple', factor(w.multiple), w.basis === 'category' ? 'median ' + x(group.median) + ' of ' + group.n + ' priced, shrunk toward the global ' + x(comps.global.median)
+        : 'the global median: ' + (group ? group.n : 0) + ' priced in the category, ' + D.constants.minComps + ' needed'],
       ['× Size', factor(w.size), 'TVL is ' + x(r.tvl_usd / comps.pivot_tvl) + ' the median comparable\'s ' + money(comps.pivot_tvl)],
       ['× Momentum', factor(w.momentum), r.change_7d === null ? 'no 7-day change on record: neutral' : 'TVL moved ' + pct(r.change_7d) + ' in 7 days'],
       ['× Maturity', factor(w.maturity), w.age_days === null ? 'no listing date on record: neutral' : w.age_days + ' days listed (since ' + esc(r.listed_at) + ') with no token'],
       ['× Breadth', factor(w.breadth), r.chains.length + (r.chains.length === 1 ? ' chain' : ' chains')]
     ];
-    const stats = [['7d TVL', pct(r.change_7d)], ['Listed for', age(w.age_days)], ['Implied / TVL', x(r.implied_value_usd / r.tvl_usd)], ['In whole dollars', M.usd(r.implied_value_usd)]];
+    const stats = [['7d TVL', pct(r.change_7d)], ['Listed for', age(w.age_days)], ['Implied / TVL', x(r.implied_value_usd / r.tvl_usd)], ['Chains', r.chains.length]];
     $('detail').innerHTML =
       '<header class="d-head"><div><p class="d-sub">Rank ' + r.rank + ' of ' + D.rows.length + (r.watchlist ? '<span class="badge">Watchlist</span>' : '') + '</p>' +
       '<h2 id="d-name" tabindex="-1" autofocus>' + esc(r.name) + '</h2><p class="d-sub">' + esc(cat(r)) + ' on ' + esc(chainList(r).slice(0, 6).join(', ')) + (r.chains.length > 6 ? ' and ' + (r.chains.length - 6) + ' more' : '') + '. Records no token.</p></div>' +
-      '<div class="d-nav"><button type="button" class="ghost" data-step="-1"' + (at <= 0 ? ' disabled' : '') + '>Previous</button><button type="button" class="ghost" data-step="1"' + (at < 0 || at >= shown.length - 1 ? ' disabled' : '') + '>Next</button><button type="button" class="ghost" data-close>Close</button></div></header>' +
+      '<button type="button" class="ghost" data-close>Close</button></header>' +
       '<div class="d-body"><section aria-labelledby="d-value"><h3 id="d-value">Implied launch value</h3>' +
       '<p class="d-figure">' + money(M.impliedValue(r.tvl_usd, w.multiple, w)) + '</p>' +
       '<p class="d-sub">' + money(r.value_low_usd) + ' to ' + money(r.value_high_usd) + ' at the comparables\' lower and upper quartile multiples, ' + x(w.low) + ' and ' + x(w.high) + '</p>' +
       '<table class="ledger"><tbody>' + ledger.map((l) => '<tr><th scope="row">' + l[0] + '</th><td class="n">' + l[1] + '</td><td>' + l[2] + '</td></tr>').join('') +
       '<tr class="total"><th scope="row">= Implied value</th><td class="n">' + money(r.implied_value_usd) + '</td><td></td></tr></tbody></table>' +
       '<dl class="d-stats">' + stats.map((s) => '<div><dt>' + s[0] + '</dt><dd>' + s[1] + '</dd></div>').join('') + '</dl>' +
-      '<h3>Priced ' + esc(cat(r)) + ' protocols behind the multiple</h3>' + (peers.length
-        ? '<table class="mini"><thead><tr><th scope="col">Token trades</th><th scope="col" class="n">TVL</th><th scope="col" class="n">Market cap</th><th scope="col" class="n">Mcap / TVL</th></tr></thead><tbody>' +
+      '<h3>Priced ' + esc(cat(r)) + ' protocols</h3>' + (peers.length
+        ? '<table class="mini"><thead><tr><th scope="col">Protocol</th><th scope="col" class="n">TVL</th><th scope="col" class="n">Market cap</th><th scope="col" class="n">Mcap / TVL</th></tr></thead><tbody>' +
           peers.slice(0, 4).map((p) => '<tr><th scope="row">' + esc(p.name) + '</th>' + cells([[money(p.tvl_usd), 1], [money(p.mcap_usd), 1], [x(ratio(p)), 1]]) + '</tr>').join('') + '</tbody></table>' +
           (peers.length > 4 ? '<p class="d-sub">The 4 largest by TVL of ' + peers.length + '.</p>' : '')
-        : '<p class="d-sub">None in this snapshot, so the multiple is the global median of all ' + comps.n + ' priced protocols.</p>') + '</section>' +
+        : '<p class="d-sub">None in this snapshot.</p>') + '</section>' +
       '<section aria-labelledby="d-plan"><h3 id="d-plan">Farm plan</h3><p class="d-sub">The ' + M.playbookOf(r.category) + ' playbook at the ' + tier.name + ' size tier: ' + M.usd(tier.lo) + ' to ' + M.usd(tier.hi) + ' of capital. Costs and times are estimates.</p>' +
       '<ol class="plan">' + plan.map((s) => '<li><p>' + esc(s.action) + '</p><dl><div><dt>Cost</dt><dd>' + esc(s.cost) + '</dd></div><div><dt>Time</dt><dd>' + esc(s.time) + '</dd></div></dl></li>').join('') + '</ol></section></div>';
   }
@@ -226,7 +225,7 @@
     // The four categories with the most ranked rows, then every priced protocol.
     $('comps').tBodies[0].innerHTML = byCategory(D.rows).slice(0, 4).map((entry) => {
       const g = comps.by[entry[0]];
-      return '<tr><th scope="row">' + esc(entry[0]) + '</th>' + cells([[entry[1], 1], [g ? g.n : 0, 1], [g ? x(g.median) : 'none', 1], ['<b>' + x((g || comps.global).multiple) + '</b>', 1]]) + '</tr>';
+      return '<tr><th scope="row">' + esc(entry[0]) + '</th>' + cells([[entry[1], 1], [g ? g.n : 0, 1], [g ? x(g.median) : 'none', 1], ['<b>' + x((g && g.n >= k.minComps ? g : comps.global).multiple) + '</b>', 1]]) + '</tr>';
     }).join('') + '<tr><th scope="row">All categories</th>' + cells([[c.candidate, 1], [comps.n, 1], [x(comps.global.median), 1], ['<b>' + x(comps.global.multiple) + '</b>', 1]]) + '</tr>';
 
     options($('chain'), 'All chains', tally(D.rows, (r) => r.chains));
@@ -257,11 +256,7 @@
     if (row) openDetail(row.getAttribute('data-slug'));
   });
   $('detail').addEventListener('click', (e) => {
-    const step = e.target.closest('button[data-step]');
-    if (step) {
-      const next = shown[shown.indexOf(bySlug[state.open]) + Number(step.getAttribute('data-step'))];
-      if (next) openDetail(next.slug);
-    } else if (e.target === e.currentTarget || e.target.closest('[data-close]')) e.currentTarget.close();
+    if (e.target === e.currentTarget || e.target.closest('[data-close]')) e.currentTarget.close();
   });
   $('detail').addEventListener('close', () => {
     const from = document.querySelector('button.open[data-slug="' + state.open + '"]');

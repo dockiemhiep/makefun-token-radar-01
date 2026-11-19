@@ -7,7 +7,8 @@
 
   /* The model's constants, each stated on the page. */
   const K = {
-    prior: 4,              // a category median is shrunk toward the global one as if 4 more comparables sat there
+    minComps: 3,           // a category needs 3 priced protocols before its own multiple is used
+    prior: 4,              // its median is then shrunk toward the global one as if 4 more comparables sat there
     winsor: [0.1, 0.9],    // multiples outside the comparables' 10th-90th percentile are pulled to the edge
     sizeWeight: 0.5,       // half of the measured size discount is applied: category mix inflates the raw slope
     size: [0.35, 1.5],     // bounds of the size factor
@@ -45,8 +46,8 @@
      product    an exchange, a bridge, a wrapped or staked product, or a versioned pool of another protocol
      candidate  it records no token at all: the launches still to come */
   function classify(p) {
-    if (p.mcap_usd !== null) return 'priced';
-    if (p.symbol !== null || p.gecko_id !== null) return 'ticker';
+    if (p.mcap_usd > 0) return 'priced';
+    if (p.mcap_usd !== null || p.symbol !== null || p.gecko_id !== null) return 'ticker'; // a market cap of 0 or less prices nothing
     if (CUSTODY.includes(p.category) || VERSIONED.test(p.name) || WRAPPER_WORD.test(p.name)) return 'product';
     return 'candidate';
   }
@@ -55,8 +56,8 @@
 
   /* Market-cap / TVL multiples of the protocols whose token trades, by category.
      Fallback chain for a pre-token protocol's multiple:
-       1. its category has comparables: the category median, shrunk toward the global median (K.prior)
-       2. its category has none: the global median
+       1. its category has K.minComps comparables or more: the category median, shrunk toward the global median (K.prior)
+       2. its category has fewer: the global median, since one or two protocols are not a market
      The same shrinkage gives each category a low and a high multiple from its quartiles. */
   function comparables(protocols) {
     const priced = protocols.filter((p) => p.mcap_usd > 0 && p.tvl_usd > 0);
@@ -83,7 +84,6 @@
     }
     return {
       n: all.length,
-      winsor: [round4(lo), round4(hi)],
       global: { n: all.length, median: round4(g.median), multiple: round4(g.median), low: round4(g.low), high: round4(g.high) },
       by: by,
       elasticity: round4(sizeElasticity(priced)),
@@ -92,8 +92,7 @@
   }
 
   /* How market cap scales with TVL across the comparables: the slope b of ln(mcap) on ln(TVL).
-     b < 1 means a protocol ten times larger is worth less than ten times more, so one flat multiple
-     would overvalue the giants and undervalue the small. Kept inside 0.3..1. */
+     b < 1: a protocol ten times larger is worth less than ten times more. Kept inside 0.3..1. */
   function sizeElasticity(priced) {
     const n = priced.length;
     let mx = 0, my = 0, sxy = 0, sxx = 0;
@@ -119,7 +118,7 @@
        implied = TVL x multiple x size x momentum x maturity x breadth
      Every factor is bounded, so the value stays a multiple of TVL the comparables support. */
   function working(p, comps, asOf) {
-    const cat = comps.by[categoryOf(p)], basis = cat || comps.global;
+    const own = comps.by[categoryOf(p)], cat = own && own.n >= K.minComps ? own : null, basis = cat || comps.global;
     const age = ageDays(asOf, p.listed_at);
     const change = p.change_7d === null ? 0 : clamp(p.change_7d, -K.momentumPct, K.momentumPct);
     return {
@@ -214,9 +213,9 @@
 
   /* Category to playbook, first match wins; a category none matches gets the yield playbook. */
   const PLAYBOOK_OF = [
-    [/lend|cdp|collateral/i, 'lending'], [/curator|allocator/i, 'curated vault'], [/yield|basis|cedefi|index|insurance/i, 'yield'],
-    [/dex|liquidity|farm|otc/i, 'liquidity'], [/deriv|option|prediction|synthetic/i, 'trading'], [/rwa|stable|reserve|card/i, 'asset'],
-    [/stak|btc|governance|locker/i, 'staking'], [/chain|bridge|launchpad|privacy|payment/i, 'network']
+    [/uncollateral|leveraged|yield|basis|cedefi|index|insurance/i, 'yield'], [/lend|cdp|collateral/i, 'lending'], [/curator|allocator/i, 'curated vault'],
+    [/dex|liquidity|farm/i, 'liquidity'], [/deriv|option|prediction|synthetic|otc/i, 'trading'], [/rwa|stable|reserve/i, 'asset'],
+    [/stak|btc|governance|locker/i, 'staking'], [/chain|bridge|launchpad|privacy|payment|card/i, 'network']
   ];
   const playbookOf = (category) => (PLAYBOOK_OF.find((p) => p[0].test(category || '')) || [0, 'yield'])[1];
 
@@ -267,7 +266,7 @@
     const c = {
       name: row.name, chain: chainName(first), chain2: chainName(chains[1]), lo: tier.lo, hi: tier.hi,
       range: usd(tier.lo) + '-' + usd(tier.hi), fee: fee,
-      asset: BTC_CHAIN.test(first) ? 'BTC or its wrapped form' : "USDC or the chain's main stablecoin",
+      asset: /cdp/i.test(row.category) ? 'a collateral asset it accepts' : BTC_CHAIN.test(first) ? 'BTC or its wrapped form' : "USDC or the chain's main stablecoin",
       depth: tier.lo >= 1000 ? 'With ' + money(row.tvl_usd) + ' of TVL the pool is deep, so the top of the range can still exit cleanly.'
         : tier.name === 'thin' ? 'TVL is only ' + money(row.tvl_usd) + ': stay at the low end and expect slippage on the way out.'
           : 'At ' + money(row.tvl_usd) + ' of TVL, start low in the range and add once a withdrawal has worked.'
@@ -285,22 +284,24 @@
       fees += bridge + fee2 * 3;
       steps.push(['Open a second position of about a quarter of your size on ' + c.chain2 + (n > 2 ? ', and make one transaction on ' + chainName(chains[2]) : '') + ', so the wallet is active on more than one of ' + c.name + "'s " + n + ' chains; bridge with the route its own app offers.', 'about ' + usd(bridge) + ' in bridge fees and ' + usd(fee2 * 3) + ' in fees on ' + c.chain2, '25 minutes, once']);
     } else {
-      steps.push([c.name + ' records TVL on ' + c.chain + ' alone, so depth counts for more than breadth: spread your deposits over at least four separate weeks and use each function of its app at least once.', 'about ' + usd(fee * 4) + ' in fees', '10 minutes a week for a month']);
+      steps.push([c.name + ' records TVL on ' + c.chain + ' alone, so depth counts for more than breadth: spread your activity over at least four separate weeks and use each function of its app at least once.', 'about ' + usd(fee * 4) + ' in fees', '10 minutes a week for a month']);
     }
 
     const ch = row.change_7d, moved = ch === null ? '' : 'TVL moved ' + (ch > 0 ? '+' : '') + ch.toFixed(1) + '% in the 7 days to ' + asOf;
-    const pace = ch === null ? 'The snapshot gives no 7-day change, so enter in two halves a week apart.'
-      : ch >= 10 ? moved + ': deposits are arriving now, so place the first half this week.'
-        : ch <= -10 ? moved + ': start at the low end and add the rest only once it stops shrinking.'
-          : moved + ', steady enough to enter in two halves a week apart.';
+    // How to pace the deposit of step 3, from the 7-day change.
+    const pace = ch === null || Math.abs(ch) < 0.05 ? 'The snapshot shows no 7-day change in TVL, so make the step 3 deposit in two halves a week apart.'
+      : ch > 100 ? moved + ': a jump that size is often one large deposit, so wait a week and confirm it holds before step 3.'
+        : ch >= 10 ? moved + ': deposits are arriving now, so make half of the step 3 deposit this week.'
+          : ch <= -10 ? moved + ': start step 3 at the low end and add the rest only once it stops shrinking.'
+            : moved + ', steady enough to make the step 3 deposit in two halves a week apart.';
     steps.push(['Check in weekly until a snapshot or the end of a programme is announced: confirm the position still earns, log the date and add one small transaction. ' + pace, 'about ' + usd(fee * 13) + ' in fees over 13 weeks', '10 minutes a week']);
 
     const age = row.model.age_days;
     const hold = age === null ? 'The snapshot gives no listing date, so treat it as unproven and review after 90 days.'
       : age < 180 ? 'Tracked for only ' + age + ' days, it is early and programmes can run long: plan on 180 days.'
-        : age >= 730 ? 'It has run ' + age + ' days and records no token, so do not count on a near date: review every 90 days and commit only what can sit idle.'
+        : age >= 730 ? 'It has run ' + age + ' days and records no token: a long run strengthens the claim but dates nothing, so review every 90 days and commit only what can sit idle.'
           : 'It has run ' + age + ' days and records no token: plan on 120 days and review then.';
-    steps.push([hold + ' Leave early if TVL falls more than 40% below the ' + money(row.tvl_usd) + ' the snapshot records.', 'in all: ' + c.range + ' of capital at risk and about ' + usd(Math.ceil(fees)) + ' in fees over the first 90 days', 'about ' + (n > 1 ? 6 : 5) + ' hours over 90 days']);
+    steps.push([hold + ' Leave early if TVL falls more than 40% below the ' + money(row.tvl_usd) + ' the snapshot records.', 'in all: ' + c.range + ' of capital at risk and about ' + usd(Math.ceil(fees)) + ' in network fees over the first 90 days, before the costs steps 3 and 4 name', (n > 1 ? '6-12' : '5-10') + ' hours over 90 days']);
     return steps.map((s) => ({ action: s[0], cost: s[1], time: s[2] }));
   }
 
