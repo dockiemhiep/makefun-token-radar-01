@@ -46,13 +46,16 @@ protocols behind the multiple. An implied value is the model's claim, not a fore
 launch.
 
 **It writes a farm plan for every row.** Seven steps, each with a cost and a time: set-up, what to read
-first, the two actions of the category's playbook (lending, curated vault, yield, liquidity, trading,
-asset, staking or network), a second chain or a depth step, the weekly cadence, and the exit rule with
-the total budget. Capital ranges follow the protocol's TVL tier, fees follow its chains, and the pacing
-follows its 7-day change and age.
+first, the two actions of the category's playbook (lending, delegation, cover, curated vault, yield,
+liquidity, subnet pool, trading, prediction, asset, staking, network or payment channel), a second chain
+or a depth step, the weekly cadence, and the exit rule with the total budget. Capital ranges follow the
+protocol's TVL tier, fees follow its chains, and the pacing follows its 7-day change and age. Every step
+names its protocol and no step is shared between rows. Only the lending playbook borrows. The snapshot's
+TVL is a protocol total, so no plan promises an exit: the larger positions are told to check the chosen
+vault's withdrawable liquidity first.
 
 **It shows its working.** The dashboard is a static page with no network and no framework: a sortable,
-filterable board, a "set aside" view of the 560 protocols that are not ranked and why, and a detail
+filterable board whose filters, sort order and open row live in the address so any view can be linked, a "set aside" view of the 560 protocols that are not ranked and why, and a detail
 view for every ranked protocol with the derivation line by line and the full plan. The page and
 `main.ts` run the same model file, `dashboard/radar-model.js`, so the screen and the board cannot
 disagree.
@@ -78,8 +81,9 @@ node tools/verify.ts /path/to/kit/input/snapshot.json /path/to/kit/starter/vendo
 ```
 
 That runs `main.ts` twice and compares the bytes, holds the output to the seven rows of the house
-gate, and keeps the hand-written dashboard source under 56,000 bytes so the judge's dossier shows it
-whole.
+gate, holds the farm plans to their own rules (no step in more than one row, every step naming its
+protocol, no promised exit, borrowing only in lending categories) and keeps the hand-written dashboard
+source under 60,000 bytes so the judge's dossier shows it whole.
 
 ## Layout
 

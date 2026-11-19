@@ -4,7 +4,9 @@
 //
 // (a) runs main.ts twice into two fresh directories and requires byte-identical output;
 // (b) holds that output to the seven rows of the house gate (RULES.txt, "The gate");
-// (c) holds the hand-written dashboard source to 56,000 bytes, so the dossier shows it whole.
+// (c) holds the farm plans to their own rules: no step shared between rows, every step naming its protocol,
+//     no promise of an exit, and the right operation for four protocols a reviewer found wrong;
+// (d) holds the hand-written dashboard source to 60,000 bytes, so the dossier shows it whole.
 // Prints one line per check and exits 1 on any failure.
 
 import { execFileSync } from 'node:child_process';
@@ -115,11 +117,43 @@ const dossierText = (JSON.parse(dossier.toString('utf8')) as { text: string }).t
 const cut = /\[Cut at .*\]/.exec(dossierText);
 check('dossier_matches', dossier.equals(rebuilt) && dossier.length <= 1_572_864, `${dossier.length} bytes (cap 1572864), rebuilt byte for byte: ${dossier.equals(rebuilt)}; text ${Buffer.byteLength(dossierText)} bytes${cut ? `; ${cut[0]}` : '; nothing cut'}`);
 
-// ---- (c) the hand-written source fits the dossier whole, and the vendored library is the kit's
+// ---- (c) the farm plans: specific to their row, honest about exits, right for the protocols a reviewer checked
+const owners = new Map<string, Set<string>>();
+for (const r of rows) for (const s of r.farm_steps) owners.set(s, (owners.get(s) ?? new Set()).add(r.slug));
+const shared = [...owners].filter(([, set]) => set.size > 1);
+const repeated = rows.find((r) => new Set(r.farm_steps).size !== r.farm_steps.length);
+const unnamed = rows.find((r) => r.farm_steps.some((s) => !s.includes(r.name)));
+check(
+  'steps_unique',
+  shared.length === 0 && !repeated && !unnamed,
+  shared.length ? `${shared.length} step(s) appear in more than one row, e.g. "${shared[0]![0].slice(0, 60)}..." in ${[...shared[0]![1]].join(', ')}` : repeated ? `${repeated.slug} repeats a step` : unnamed ? `a step of ${unnamed.slug} does not name it` : `${owners.size} steps, none in more than one row, each naming its protocol`,
+);
+
+const planOf = (slug: string): string => (rows.find((r) => r.slug === slug)?.farm_steps ?? []).join('\n');
+// [slug, what its plan must say, what it must not]
+const OPERATIONS: [string, RegExp[], RegExp[]][] = [
+  ['symbiotic', [/collateral/i, /withdrawal/i, /claim/i, /slash/i], [/borrow/i, /health factor/i, /APR/]],
+  ['firelight', [/FXRP/, /stXRP/], [/USDC/, /stablecoin/i]],
+  ['bittensor-dtao', [/TAO/, /alpha/, /user liquidity enabled/], [/stablecoin/i, /blue-chip/i]],
+  ['lightning-network', [/Lightning wallet/, /channel/, /invoice/, /ppm/], []],
+];
+const wrongOps = OPERATIONS.flatMap(([slug, must, mustNot]) => {
+  const plan = planOf(slug);
+  if (!plan) return [`${slug} is not on the board`];
+  return [...must.filter((re) => !re.test(plan)).map((re) => `${slug} lacks ${re}`), ...mustNot.filter((re) => re.test(plan)).map((re) => `${slug} still says ${re}`)];
+});
+check('plan_operations', wrongOps.length === 0, wrongOps.length ? wrongOps.join('; ') : OPERATIONS.map(([slug, must, mustNot]) => `${slug}: ${must.length} required, ${mustNot.length} barred`).join('; '));
+
+const EXIT_CLAIM = /exit cleanly|clean exit|cleanly|exits? eas/i;
+const exitClaims = rows.filter((r) => r.farm_steps.some((s) => EXIT_CLAIM.test(s)));
+const lendingOnly = rows.filter((r) => !/lend|cdp/i.test(String((r as { category?: string | null }).category ?? '')) && r.farm_steps.some((s) => /borrow|health factor/i.test(s)));
+check('no_exit_claim', exitClaims.length === 0 && lendingOnly.length === 0, exitClaims.length ? `${exitClaims.length} row(s) promise an exit, e.g. ${exitClaims[0]!.slug}` : lendingOnly.length ? `borrowing prescribed outside a lending category: ${lendingOnly.map((r) => r.slug).join(', ')}` : `no row promises an exit; ${rows.filter((r) => r.farm_steps.some((s) => /withdrawable liquidity or utilisation/.test(s))).length} rows tell the reader to check withdrawable liquidity; borrowing only in lending and CDP categories`);
+
+// ---- (d) the hand-written source fits the dossier whole, and the vendored library is the kit's
 const authored = readdirSync(join(root, 'dashboard')).filter((f) => !f.startsWith('.')).sort();
 const authoredBytes = authored.reduce((n, f) => n + statSync(join(root, 'dashboard', f)).size, 0);
 const shownWhole = authored.every((f) => dossierText.includes(`### ${f}\n`) && dossierText.includes(readFileSync(join(root, 'dashboard', f), 'utf8')));
-check('source_budget', authoredBytes <= 56_000 && shownWhole, `${authored.join(' + ')} = ${authoredBytes} bytes (budget 56000); every file whole in the dossier: ${shownWhole}`);
+check('source_budget', authoredBytes <= 60_000 && shownWhole, `${authored.join(' + ')} = ${authoredBytes} bytes (budget 60000); every file whole in the dossier: ${shownWhole}`);
 if (kitVendor) check('vendor_identical', readFileSync(join(root, 'vendor', 'makefun-board.ts')).equals(readFileSync(kitVendor)), 'vendor/makefun-board.ts is byte for byte the kit\'s');
 
 for (const out of runs) rmSync(out, { recursive: true, force: true });

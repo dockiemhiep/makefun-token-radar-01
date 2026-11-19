@@ -1,7 +1,7 @@
 /* Token Launch Radar: the page.
    Renders window.RADAR_DATA (zz-data.js, written by main.ts from the sealed snapshot) and calls
    RadarModel (radar-model.js) for each row's working and farm plan: the functions that wrote board.json.
-   No network, no framework. The view's state lives in the address's hash, so any view can be linked. */
+   No network, no framework. The view's state, sort included, lives in the address's hash, so any view can be linked. */
 (function () {
   'use strict';
   const D = window.RADAR_DATA, M = window.RadarModel;
@@ -79,6 +79,8 @@
     state.chain = h.get('chain') || '';
     state.wl = h.get('wl') === '1';
     [state.sort, state.dir] = firstSort();
+    const by = h.get('sort') || '', key = by.replace(/^-/, ''); // sort=-tvl_usd: descending
+    if (COLUMNS[state.view].some((c) => c[0] === key)) [state.sort, state.dir] = [key, by === key ? 1 : -1];
     state.open = bySlug[h.get('p')] ? h.get('p') : '';
   }
   function writeHash() {
@@ -86,6 +88,7 @@
     if (state.view === 'aside') h.set('view', 'aside');
     for (const k of ['q', 'cat', 'chain']) if (state[k]) h.set(k, state[k]);
     if (state.wl) h.set('wl', '1');
+    if ([state.sort, state.dir].join() !== firstSort().join()) h.set('sort', (state.dir < 0 ? '-' : '') + state.sort);
     if (state.open) h.set('p', state.open);
     const text = h.toString();
     history.replaceState(null, '', text ? '#' + text : location.pathname + location.search);
@@ -192,7 +195,7 @@
           peers.slice(0, 4).map((p) => '<tr><th scope="row">' + esc(p.name) + '</th>' + cells([[money(p.tvl_usd), 1], [money(p.mcap_usd), 1], [x(ratio(p)), 1]]) + '</tr>').join('') + '</tbody></table>' +
           (peers.length > 4 ? '<p class="d-sub">The 4 largest by TVL of ' + peers.length + '.</p>' : '')
         : '<p class="d-sub">None in this snapshot.</p>') + '</section>' +
-      '<section aria-labelledby="d-plan"><h3 id="d-plan">Farm plan</h3><p class="d-sub">The ' + M.playbookOf(r.category) + ' playbook at the ' + tier.name + ' size tier: ' + M.usd(tier.lo) + ' to ' + M.usd(tier.hi) + ' of capital. Costs and times are estimates.</p>' +
+      '<section aria-labelledby="d-plan"><h3 id="d-plan">Farm plan</h3><p class="d-sub">The ' + M.playbookOf(r.category, r.chains[0]) + ' playbook at the ' + tier.name + ' size tier: ' + M.usd(tier.lo) + ' to ' + M.usd(tier.hi) + ' of capital. Costs and times are estimates.</p>' +
       '<ol class="plan">' + plan.map((s) => '<li><p>' + esc(s.action) + '</p><dl><div><dt>Cost</dt><dd>' + esc(s.cost) + '</dd></div><div><dt>Time</dt><dd>' + esc(s.time) + '</dd></div></dl></li>').join('') + '</ol></section></div>';
   }
 
