@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#0d1620">
+<title>Token Launch Radar</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <svg class="mark" viewBox="0 0 40 40" aria-hidden="true">
+      <circle cx="20" cy="20" r="18"/><circle cx="20" cy="20" r="11"/><circle cx="20" cy="20" r="4"/>
+      <path class="sweep" d="M20 20 L20 2 A18 18 0 0 1 35.6 11 Z"/><circle class="blip" cx="27" cy="12" r="2.2"/>
+    </svg>
+    <div>
+      <h1>Token Launch Radar</h1>
+      <p class="lede">Protocols that record no token, ranked by what a launch would be worth at the market-cap / TVL multiples of the protocols in the same snapshot whose token already trades.</p>
+    </div>
+  </div>
+  <dl class="facts" id="facts"></dl>
+</header>
+
+<section class="universe" aria-labelledby="universe-title">
+  <h2 id="universe-title">All <span id="universe-total"></span> protocols in the snapshot, sorted before any is ranked</h2>
+  <div class="bar" id="universe-bar" role="img" aria-label="Share of protocols in each set"></div>
+  <ul class="legend" id="universe-legend"></ul>
+</section>
+
+<main class="layout">
+  <section class="board" aria-labelledby="board-title">
+    <h2 id="board-title" class="sr">The board</h2>
+    <form class="filters" id="filters" role="search" aria-label="Filter the board">
+      <div class="tabs" role="group" aria-label="Which protocols to show">
+        <button type="button" id="view-ranked" aria-pressed="true">Ranked</button>
+        <button type="button" id="view-aside" aria-pressed="false">Set aside</button>
+      </div>
+      <label class="field grow"><span>Search</span>
+        <input id="q" type="search" placeholder="Name, category or chain" autocomplete="off" spellcheck="false" enterkeyhint="search"></label>
+      <label class="field"><span>Category</span><select id="cat"></select></label>
+      <label class="field"><span>Chain</span><select id="chain"></select></label>
+      <label class="check"><input id="wl" type="checkbox"><span>Watchlist only</span></label>
+      <button type="button" class="ghost" id="reset">Reset</button>
+    </form>
+    <p class="count" id="count" role="status" aria-live="polite"></p>
+    <div class="table-wrap" id="table-wrap" tabindex="0" aria-label="Board table, scrollable">
+      <table id="board">
+        <caption class="sr" id="caption"></caption>
+        <thead><tr id="head"></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+      <div class="empty" id="empty" hidden>
+        <p id="status">No protocol matches these filters.</p>
+        <button type="button" class="ghost" id="reset-empty">Clear the filters</button>
+      </div>
+    </div>
+  </section>
+
+  <aside class="rail">
+    <section class="card" id="method" aria-labelledby="method-title">
+      <h2 id="method-title">How this radar values a launch</h2>
+      <p class="formula">implied value = TVL <i>&times;</i> category multiple<br><i>&times;</i> size <i>&times;</i> momentum <i>&times;</i> maturity <i>&times;</i> breadth</p>
+      <dl class="terms">
+        <dt>Category multiple</dt>
+        <dd>Median market cap / TVL of the category's priced protocols, shrunk toward the median of all <b data-k="n"></b> (<b data-k="global"></b>).</dd>
+        <dt>Size <span data-k="size"></span></dt>
+        <dd>Market cap grows as TVL<sup data-k="b"></sup> across the comparables, so a larger protocol earns a lower multiple.</dd>
+        <dt>Momentum <span data-k="momentum"></span></dt>
+        <dd>Half of the 7-day TVL change, clamped to &plusmn;<span data-k="clamp"></span>%.</dd>
+        <dt>Maturity <span data-k="maturity"></span></dt>
+        <dd>Days listed while recording no token; full at 3 years.</dd>
+        <dt>Breadth <span data-k="breadth"></span></dt>
+        <dd>+3% for each doubling of the chain count.</dd>
+      </dl>
+      <p class="note">Every input is a field of the snapshot; no protocol is named in the model. A value is a claim, not a forecast of a launch.</p>
+    </section>
+    <section class="card" aria-labelledby="comps-title">
+      <h2 id="comps-title">Comparable multiples</h2>
+      <table class="mini" id="comps">
+        <thead><tr><th scope="col">Category</th><th scope="col" class="n">Ranked</th><th scope="col" class="n">Priced</th><th scope="col" class="n">Median</th><th scope="col" class="n">Used</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </section>
+  </aside>
+</main>
+
+<dialog id="detail" aria-labelledby="d-name"></dialog>
+
+<script src="radar-model.js"></script>
+<script src="zz-data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
